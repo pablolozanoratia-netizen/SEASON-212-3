@@ -82,4 +82,62 @@ def simular_partido(local, visitante, comp):
 menu = st.sidebar.radio("NAVEGACIÓN", ["🏆 Competiciones", "📋 Ver Plantillas", "👤 Buscador de Jugadores", "🌍 Ranking Global"])
 
 if menu == "🏆 Competiciones":
-    comp_activa = st.selectbox("Selecciona Torneo", list(
+    comp_activa = st.selectbox("Selecciona Torneo", list(st.session_state.data.keys()))
+    tab_sim, tab_stats = st.tabs(["🎮 Simulador", "📊 Estadísticas"])
+    
+    with tab_sim:
+        chat = st.text_area("Pega los partidos aquí (Ej: Real Madrid - Barcelona)", height=150)
+        if st.button("🚀 Simular Partidos"):
+            lineas = [l.strip() for l in chat.split("\n") if "-" in l]
+            st.session_state.data[comp_activa]["Historial"] = [simular_partido(l.split("-")[0].strip(), l.split("-")[1].strip(), comp_activa) for l in lineas]
+        
+        for r in st.session_state.data[comp_activa]["Historial"]:
+            st.markdown(f"### {r['l']} {r['gl']} - {r['gv']} {r['v']}")
+            st.write(f"🌟 **MVP:** {r['mvp']}")
+            with st.expander("Ver Goles"):
+                for e in r['evs']: st.write(f"{e['min']}' ⚽ {e['autor']} (Asist: {e['asist']})")
+
+    with tab_stats:
+        c1, c2, c3 = st.columns(3)
+        for col, t, tit in zip([c1, c2, c3], ["Goles", "Asis", "MVP"], ["GOLEADORES", "ASISTENTES", "MVPs"]):
+            col.subheader(tit)
+            df = pd.DataFrame.from_dict(st.session_state.data[comp_activa][t], orient='index', columns=['Total']).sort_values('Total', ascending=False).head(30)
+            col.table(df)
+
+elif menu == "📋 Ver Plantillas":
+    st.header("📋 Alineaciones con Posiciones")
+    for eq, jugs in st.session_state.equipos.items():
+        with st.expander(f"Plantilla de {eq}"):
+            for j in jugs:
+                pos = st.session_state.info_jugadores.get(j, ("?", "Desconocida"))[1]
+                st.markdown(f"**{j}** - <span style='color:red; font-weight:bold'>{pos}</span>", unsafe_allow_html=True)
+
+elif menu == "👤 Buscador de Jugadores":
+    st.header("👤 Perfil del Jugador")
+    nombre = st.selectbox("Selecciona un Pokémon", sorted(list(st.session_state.info_jugadores.keys())))
+    if nombre:
+        tier, pos = st.session_state.info_jugadores.get(nombre)
+        club = next((k for k, v in st.session_state.equipos.items() if nombre in v), "Agente Libre")
+        st.markdown(f"""
+        <div style="background-color:#1e1e1e; padding:25px; border-radius:15px; border-left: 8px solid #ff4b4b;">
+            <h1 style="margin:0; color:white;">{nombre}</h1>
+            <p style="font-size:20px; color:#ff4b4b;">{pos} | {tier} | {club}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.write("### 📊 Rendimiento por Competición")
+        tabs = st.tabs(list(st.session_state.data.keys()) + ["TOTAL GLOBAL"])
+        tg, ta, tm = 0, 0, 0
+        for i, c in enumerate(st.session_state.data.keys()):
+            g, a, m = st.session_state.data[c]["Goles"].get(nombre, 0), st.session_state.data[c]["Asis"].get(nombre, 0), st.session_state.data[c]["MVP"].get(nombre, 0)
+            tabs[i].metric("Goles", g); tabs[i].metric("Asistencias", a); tabs[i].metric("MVPs", m)
+            tg += g; ta += a; tm += m
+        tabs[-1].success(f"Estadísticas Totales: {tg} Goles | {ta} Asistencias | {tm} MVPs")
+
+elif menu == "🌍 Ranking Global":
+    st.header("🌍 Ranking Top 30 Temporada 212")
+    g_global = {}
+    for c in st.session_state.data:
+        for j, v in st.session_state.data[c]["Goles"].items(): g_global[j] = g_global.get(j, 0) + v
+    st.table(pd.DataFrame.from_dict(g_global, orient='index', columns=['Goles Totales']).sort_values('Goles Totales', ascending=False).head(30))
+ 
